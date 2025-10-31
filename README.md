@@ -1,6 +1,4 @@
-<div align="center">
-# 🎵 本地音乐播放器
-</div>
+<h1 align="center">🎵 本地音乐播放器</h1>
 
 <div align="center">
 
@@ -56,7 +54,7 @@
 
 - **手机同步**
   - 通过 ADB 连接 Android 设备
-  - 智能增量同步（只传输新增/删除的文件）
+  - 智能增量同步
   - 自动更新手机音乐元数据
 
 ---
@@ -89,7 +87,10 @@
 #### 安装依赖
 
 ```bash
-# 克隆或下载项目后，进入项目目录
+# 克隆或下载项目
+git clone https://github.com/lsyycf/Music.git
+
+# 进入项目目录
 cd "C:\Program Files\Music"
 
 # 安装依赖包
@@ -235,7 +236,7 @@ Windows: C:\Users\<用户名>\settings.json
 
 ### 配置文件内容
 
-```json
+```
 {
     "global_volume": 1.0,               # 全局音量 (0.0-1.0)
     "last_active_folder": "...",        # 上次使用的音乐文件夹
