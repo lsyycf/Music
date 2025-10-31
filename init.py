@@ -4,16 +4,14 @@ import stat
 import win32file
 import pywintypes
 from mutagen import File as MutagenFile
-
+from config import SUPPORTED_FORMATS
 
 def process_music_folder_three_steps(folder_path):
     if not os.path.isdir(folder_path):
         return
-
-    supported_formats = ('.flac', '.mp3', '.wav', '.ogg', '.m4a')
     
     music_files = [f for f in os.listdir(folder_path) 
-                   if f.lower().endswith(supported_formats)]
+                   if f.lower().endswith(SUPPORTED_FORMATS)]
     
     if not music_files:
         return
