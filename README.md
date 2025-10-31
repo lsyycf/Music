@@ -1,4 +1,6 @@
+<div align="center">
 # 🎵 本地音乐播放器
+</div>
 
 <div align="center">
 
@@ -81,7 +83,7 @@
 
 #### 环境要求
 
-- Python 3.8 或更高版本
+- Python 3.10 或更高版本
 - Windows 操作系统
 
 #### 安装依赖
@@ -91,7 +93,7 @@
 cd "C:\Program Files\Music"
 
 # 安装依赖包
-pip install pygame mutagen pywin32
+pip install -r requirements.txt
 ```
 
 #### 运行程序
@@ -235,18 +237,18 @@ Windows: C:\Users\<用户名>\settings.json
 
 ```json
 {
-    "global_volume": 1.0,              // 全局音量 (0.0-1.0)
-    "last_active_folder": "...",       // 上次使用的音乐文件夹
-    "next_new_playlist_mode": "random", // 播放模式 (random/sequential)
-    "playlists": {                     // 各文件夹的播放列表状态
+    "global_volume": 1.0,               # 全局音量 (0.0-1.0)
+    "last_active_folder": "...",        # 上次使用的音乐文件夹
+    "next_new_playlist_mode": "random", # 播放模式 (random/sequential)
+    "playlists": {                      # 各文件夹的播放列表状态
         "文件夹路径": {
-            "song_list": [...],        // 歌曲列表
-            "last_index": 0,           // 上次播放的歌曲索引
-            "last_position": 0.0,      // 上次播放的位置（秒）
-            "play_mode": "random"      // 该文件夹的播放模式
+            "song_list": ["..."],       # 歌曲列表
+            "last_index": 0,            # 上次播放的歌曲索引
+            "last_position": 0.0,       # 上次播放的位置（秒）
+            "play_mode": "random"       # 该文件夹的播放模式
         }
     },
-    "phone_mappings": {                // 手机同步路径映射
+    "phone_mappings": {                 # 手机同步路径映射
         "电脑路径": "手机路径"
     }
 }
