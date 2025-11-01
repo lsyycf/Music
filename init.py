@@ -1,10 +1,9 @@
 import os
-import datetime
 import stat
 import win32file
 import pywintypes
 from mutagen import File as MutagenFile
-from config import SUPPORTED_FORMATS
+from config import SUPPORTED_FORMATS, get_datetime
 
 def process_music_folder_three_steps(folder_path):
     if not os.path.isdir(folder_path):
@@ -48,8 +47,7 @@ def process_music_folder_three_steps(folder_path):
         except Exception:
             pass
 
-    today = datetime.datetime.now()
-    target_time = datetime.datetime(today.year, today.month, today.day, 0, 0, 0)
+    target_time = get_datetime()
     win_time = pywintypes.Time(target_time)
     
     for filename in music_files:
@@ -58,12 +56,18 @@ def process_music_folder_three_steps(folder_path):
         try:
             if not os.access(file_path, os.W_OK):
                 os.chmod(file_path, stat.S_IWRITE)
-            
+
             handle = win32file.CreateFile(
-                file_path, win32file.GENERIC_WRITE, 0, None,
-                win32file.OPEN_EXISTING, 0, None
+                file_path, 
+                win32file.GENERIC_WRITE,
+                win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE, 
+                None,
+                win32file.OPEN_EXISTING, 
+                win32file.FILE_ATTRIBUTE_NORMAL, 
+                None
             )
             win32file.SetFileTime(handle, win_time, win_time, win_time)
+
         except Exception:
             pass
         finally:

@@ -1,9 +1,8 @@
 import os
 import sys
 import subprocess
-import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from config import SUPPORTED_FORMATS
+from config import SUPPORTED_FORMATS, get_timestr
 from music_utils import validate_and_get_music_files
 
 if sys.platform == 'win32':
@@ -117,36 +116,22 @@ def copy_file_to_phone(local_path, phone_folder_path):
         return False
 
 
-def touch_phone_file(phone_path, filename, time_str, supports_t_flag):
+def touch_phone_file(phone_path, filename, time_str):
     try:
         file_path = f"{phone_path}/{filename}"
-        if supports_t_flag:
-            result = subprocess.run(
-                ["adb", "shell", f"touch -t {time_str} '{file_path}'"],
-                capture_output=True,
-                encoding='utf-8',
-                errors='ignore',
-                timeout=5,
-                creationflags=CREATE_NO_WINDOW
-            )
-        else:
-            result = subprocess.run(
-                ["adb", "shell", f"touch '{file_path}'"],
-                capture_output=True,
-                encoding='utf-8',
-                errors='ignore',
-                timeout=5,
-                creationflags=CREATE_NO_WINDOW
-            )
-        return result.returncode == 0
+        result = subprocess.run(
+            ["adb", "shell", f"touch -c -t {time_str} '{file_path}'"],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore',
+            timeout=5, creationflags=CREATE_NO_WINDOW
+        )
+        return result.returncode
     except Exception:
         return False
 
 
 def process_phone_music_metadata(phone_path):
     try:
-        today = datetime.datetime.now()
-        time_str = today.strftime("%Y%m%d0000")
+        time_str = get_timestr()
         
         files = list_phone_files(phone_path)
         total = len(files)
@@ -154,50 +139,22 @@ def process_phone_music_metadata(phone_path):
         if total == 0:
             return True
         
-        test_result = subprocess.run(
-            ["adb", "shell", "touch --help"],
-            capture_output=True,
-            encoding='utf-8',
-            errors='ignore',
-            timeout=3,
-            creationflags=CREATE_NO_WINDOW
-        )
-        
-        supports_t_flag = '-t' in test_result.stdout if test_result.stdout else False
-        
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             future_to_filename = {
-                executor.submit(touch_phone_file, phone_path, filename, time_str, supports_t_flag): filename
+                executor.submit(touch_phone_file, phone_path, filename, time_str): filename
                 for filename in files
             }
             for future in as_completed(future_to_filename):
-                try:
-                    future.result()
-                except Exception:
-                    pass
+                future.result()
         
-        try:
-            scan_result = subprocess.run(
-                ["adb", "shell", f"am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{phone_path}"],
-                capture_output=True,
-                encoding='utf-8',
-                errors='ignore',
-                timeout=10,
-                creationflags=CREATE_NO_WINDOW
-            )
-            
-            if scan_result.returncode != 0:
-                subprocess.run(
-                    ["adb", "shell", f"media scan {phone_path}"],
-                    capture_output=True,
-                    encoding='utf-8',
-                    errors='ignore',
-                    timeout=30,
-                    creationflags=CREATE_NO_WINDOW
-                )
-        except Exception:
-            pass
-        
+        result = subprocess.run(
+            ["adb", "shell", f"am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{phone_path}"],
+            capture_output=True,
+            encoding='utf-8',
+            errors='ignore',
+            timeout=10,
+            creationflags=CREATE_NO_WINDOW
+        )
         return True
     except Exception:
         return False
@@ -221,14 +178,10 @@ def sync_phone_complete(music_folder, phone_path):
                     for filename in to_delete
                 }
                 for future in as_completed(future_to_filename):
-                    try:
-                        future.result()
-                    except Exception:
-                        pass
+                    future.result()
         
         if to_upload:
-            today = datetime.datetime.now()
-            time_str = today.strftime("%Y%m%d0000")
+            time_str = get_timestr()
             newly_pushed_files = []
             
             with ThreadPoolExecutor(max_workers=min(4, MAX_WORKERS)) as executor:
@@ -238,33 +191,17 @@ def sync_phone_complete(music_folder, phone_path):
                 }
                 for future in as_completed(future_to_filename):
                     filename = future_to_filename[future]
-                    try:
-                        if future.result():
-                            newly_pushed_files.append(filename)
-                    except Exception:
-                        pass
+                    if future.result():
+                        newly_pushed_files.append(filename)
             
             if newly_pushed_files:
-                test_result = subprocess.run(
-                    ["adb", "shell", "touch --help"],
-                    capture_output=True,
-                    encoding='utf-8',
-                    errors='ignore',
-                    timeout=3,
-                    creationflags=CREATE_NO_WINDOW
-                )
-                supports_t_flag = '-t' in test_result.stdout if test_result.stdout else False
-                
                 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                     future_to_filename = {
-                        executor.submit(touch_phone_file, phone_path, filename, time_str, supports_t_flag): filename
+                        executor.submit(touch_phone_file, phone_path, filename, time_str): filename
                         for filename in newly_pushed_files
                     }
                     for future in as_completed(future_to_filename):
-                        try:
-                            future.result()
-                        except Exception:
-                            pass
+                        future.result()
         
         process_phone_music_metadata(phone_path)
         return True

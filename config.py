@@ -1,5 +1,6 @@
 import os
 import json
+import datetime
 
 APP_DATA_FILE = os.path.join(os.path.expanduser("~"), "settings.json")
 SCREEN_WIDTH = 600
@@ -25,6 +26,15 @@ MIN_PROGRESS_BAR_PADDING = 45
 FAST_FORWARD_REWIND_STEP = 10
 SCROLL_DELAY_DURATION = 2000
 SUPPORTED_FORMATS = (".flac", ".mp3", ".wav", ".ogg", ".m4a")
+
+
+def get_datetime():
+    today = datetime.datetime.now()
+    return datetime.datetime(today.year, today.month, today.day, 0, 0, 0)
+
+
+def get_timestr():
+    return get_datetime().strftime("%Y%m%d%H%M")
 
 
 def load_app_data():

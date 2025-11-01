@@ -3,6 +3,7 @@ import sys
 import random
 import subprocess
 import pygame
+import threading
 from tkinter import Tk, filedialog
 
 from config import *
@@ -201,6 +202,8 @@ def main():
         False,
         None,
     )
+    is_syncing = False
+    sync_thread = None
 
     def set_volume(level):
         nonlocal global_volume, volume_before_mute
@@ -235,37 +238,69 @@ def main():
         deleted_songs = old_set - new_set
         added_songs = new_set - old_set
         
+        current_song_path = None
+        if 0 <= current_idx < len(old_playlist):
+            current_song_path = old_playlist[current_idx]
+        
         updated_playlist = list(old_playlist)
         updated_index = current_idx
         
-        if deleted_songs:
-            for song in deleted_songs:
-                if song in updated_playlist:
-                    song_idx = updated_playlist.index(song)
-                    updated_playlist.remove(song)
+        if current_mode == "sequential":
+            if deleted_songs:
+                updated_playlist = [song for song in updated_playlist if song not in deleted_songs]
+            if added_songs:
+                updated_playlist.extend(list(added_songs))
+            if updated_playlist:
+                updated_playlist.sort(key=lambda f: os.path.basename(f).lower())
+            if not updated_playlist:
+                updated_index = 0
+            elif current_song_path and current_song_path in updated_playlist:
+                updated_index = updated_playlist.index(current_song_path)
+            elif current_song_path:
+                current_name = os.path.basename(current_song_path).lower()
+                updated_index = len(updated_playlist)
+                for i, song in enumerate(updated_playlist):
+                    if os.path.basename(song).lower() > current_name:
+                        updated_index = i
+                        break
+            else:
+                updated_index = 0
+        else:
+            if deleted_songs:
+                indices_to_remove = []
+                for song in deleted_songs:
+                    if song in updated_playlist:
+                        song_idx = updated_playlist.index(song)
+                        indices_to_remove.append(song_idx)
+                
+                for song_idx in sorted(indices_to_remove, reverse=True):
+                    updated_playlist.pop(song_idx)
                     if song_idx < updated_index:
                         updated_index -= 1
-        
-        if added_songs:
-            if updated_index < len(updated_playlist):
-                songs_after_current = updated_playlist[updated_index + 1:]
-                updated_playlist = updated_playlist[:updated_index + 1]
-                songs_to_shuffle = list(added_songs) + songs_after_current
-                random.shuffle(songs_to_shuffle)
-                updated_playlist.extend(songs_to_shuffle)
-            else:
-                new_songs_list = list(added_songs)
-                random.shuffle(new_songs_list)
-                updated_playlist.extend(new_songs_list)
             
-        if updated_playlist and updated_index >= len(updated_playlist):
-            updated_index = len(updated_playlist) - 1
-        elif not updated_playlist:
+            if added_songs:
+                if updated_index < len(updated_playlist):
+                    songs_after_current = updated_playlist[updated_index + 1:]
+                    updated_playlist = updated_playlist[:updated_index + 1]
+                    songs_to_shuffle = list(added_songs) + songs_after_current
+                    random.shuffle(songs_to_shuffle)
+                    updated_playlist.extend(songs_to_shuffle)
+                else:
+                    new_songs_list = list(added_songs)
+                    random.shuffle(new_songs_list)
+                    updated_playlist.extend(new_songs_list)
+        
+        if updated_playlist:
+            if updated_index >= len(updated_playlist):
+                updated_index = len(updated_playlist) - 1
+            elif updated_index < 0:
+                updated_index = 0
+        else:
             updated_index = 0
             
         return updated_playlist, updated_index
 
-    def load_playlist_state(folder_path):
+    def load_playlist_state(folder_path, process_files=True):
         nonlocal music_folder, current_playlist, current_index, saved_pos, active_playlist_mode, duration, is_paused, song_playing
 
         music_folder = folder_path
@@ -275,7 +310,7 @@ def main():
         phone_input_box.set_text(current_phone_path)
 
         duration, saved_pos = 0.0, 0.0
-        if music_folder:
+        if music_folder and process_files:
             try:
                 process_music_folder_three_steps(music_folder)
             except Exception:
@@ -316,13 +351,55 @@ def main():
             if saved_pos > 0:
                 is_paused = True
 
-    def load_and_play_song(idx, start_pos=0.0):
+    def load_and_play_song(idx, start_pos=0.0, skip_count=0, original_length=None):
         nonlocal duration, song_playing, is_paused, current_index, saved_pos
         if not current_playlist:
+            prepare_scrolling_text(
+                "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+            )
+            duration = 0.0
+            song_playing = False
+            is_paused = True
+            controls[2].text = "播放"
+            current_index = 0
             return
+        
+        if original_length is None:
+            original_length = len(current_playlist)
+        
+        if skip_count >= original_length:
+            prepare_scrolling_text(
+                "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+            )
+            duration = 0.0
+            song_playing = False
+            is_paused = True
+            controls[2].text = "播放"
+            current_index = 0
+            return
+        
         current_index = idx % len(current_playlist)
         song_path = current_playlist[current_index]
         saved_pos = start_pos
+        
+        if not os.path.exists(song_path):
+            old_index = current_index
+            current_playlist.pop(current_index)
+            if not current_playlist:
+                prepare_scrolling_text(
+                    "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+                )
+                duration = 0.0
+                song_playing = False
+                is_paused = True
+                controls[2].text = "播放"
+                current_index = 0
+                return
+            if old_index >= len(current_playlist):
+                current_index = 0
+            load_and_play_song(current_index, start_pos=0.0, skip_count=skip_count + 1, original_length=original_length)
+            return
+        
         try:
             pygame.mixer.music.load(song_path)
             duration = pygame.mixer.Sound(song_path).get_length() or 0.0
@@ -335,18 +412,64 @@ def main():
                 SCREEN_WIDTH - 40,
             )
         except (pygame.error, FileNotFoundError):
+            old_index = current_index
             current_playlist.pop(current_index)
-            if current_playlist:
-                handle_action("next_auto")
-            else:
-                handle_action("reset")
+            if not current_playlist:
+                prepare_scrolling_text(
+                    "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+                )
+                duration = 0.0
+                song_playing = False
+                is_paused = True
+                controls[2].text = "播放"
+                current_index = 0
+                return
+            if old_index >= len(current_playlist):
+                current_index = 0
+            load_and_play_song(current_index, start_pos=0.0, skip_count=skip_count + 1, original_length=original_length)
 
-    def load_song_info_only(idx):
+    def load_song_info_only(idx, skip_count=0, original_length=None):
         nonlocal duration, song_playing, current_index
         if not current_playlist:
+            prepare_scrolling_text(
+                "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+            )
+            duration = 0.0
+            song_playing = False
+            current_index = 0
             return
+        
+        if original_length is None:
+            original_length = len(current_playlist)
+        
+        if skip_count >= original_length:
+            prepare_scrolling_text(
+                "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+            )
+            duration = 0.0
+            song_playing = False
+            current_index = 0
+            return
+        
         current_index = idx % len(current_playlist)
         song_path = current_playlist[current_index]
+        
+        if not os.path.exists(song_path):
+            old_index = current_index
+            current_playlist.pop(current_index)
+            if not current_playlist:
+                prepare_scrolling_text(
+                    "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+                )
+                duration = 0.0
+                song_playing = False
+                current_index = 0
+                return
+            if old_index >= len(current_playlist):
+                current_index = 0
+            load_song_info_only(current_index, skip_count=skip_count + 1, original_length=original_length)
+            return
+        
         try:
             duration = pygame.mixer.Sound(song_path).get_length() or 0.0
             song_playing = False
@@ -356,8 +479,19 @@ def main():
                 SCREEN_WIDTH - 40,
             )
         except (pygame.error, FileNotFoundError):
-            duration = 0.0
-            prepare_scrolling_text("错误: 无法加载歌曲", font_large, SCREEN_WIDTH - 40)
+            old_index = current_index
+            current_playlist.pop(current_index)
+            if not current_playlist:
+                prepare_scrolling_text(
+                    "无音乐, 请浏览文件夹", font_large, SCREEN_WIDTH - 40
+                )
+                duration = 0.0
+                song_playing = False
+                current_index = 0
+                return
+            if old_index >= len(current_playlist):
+                current_index = 0
+            load_song_info_only(current_index, skip_count=skip_count + 1, original_length=original_length)
 
     def seek_music(ratio):
         nonlocal saved_pos
@@ -368,7 +502,7 @@ def main():
                 load_and_play_song(current_index, start_pos=seek_pos)
 
     def handle_action(action):
-        nonlocal is_paused, song_playing, current_index, saved_pos, duration, next_new_playlist_mode, active_playlist_mode, music_folder, current_playlist, playlists_data, running, phone_mappings
+        nonlocal is_paused, song_playing, current_index, saved_pos, duration, next_new_playlist_mode, active_playlist_mode, music_folder, current_playlist, playlists_data, running, phone_mappings, is_syncing
 
         allowed_when_empty = ["browse", "toggle_mode", "exit", "reset", "toggle_mute", "sync_phone", "reset_sync"]
         if not current_playlist and action not in allowed_when_empty:
@@ -451,7 +585,6 @@ def main():
                 }
 
             pygame.mixer.music.stop()
-            prepare_scrolling_text("正在选择文件夹...", font_large, SCREEN_WIDTH - 40)
             pygame.display.flip()
 
             root = Tk()
@@ -460,11 +593,11 @@ def main():
             root.destroy()
 
             if folder:
-                load_playlist_state(os.path.abspath(folder))
+                load_playlist_state(os.path.abspath(folder), process_files=True)
                 if is_playing_before_browse and current_playlist:
                     handle_action("play_pause")
             else:
-                load_playlist_state(music_folder)
+                load_playlist_state(music_folder, process_files=False)
                 if is_playing_before_browse and current_playlist:
                     handle_action("play_pause")
 
@@ -474,12 +607,15 @@ def main():
             pygame.mixer.music.stop()
             music_folder = ""
             next_new_playlist_mode = "random"
-            load_playlist_state(music_folder)
+            load_playlist_state(music_folder, process_files=False)
         elif action == "toggle_mute":
             set_volume(0.0 if global_volume > 0.01 else volume_before_mute)
         
         elif action == "sync_phone":
             if not music_folder:
+                return
+            
+            if is_syncing:
                 return
             
             if not check_adb_connection():
@@ -513,10 +649,25 @@ def main():
                 phone_mappings[music_folder] = phone_path
                 phone_input_box.set_text(phone_path)
             
-            try:
-                sync_phone_complete(music_folder, phone_path)
-            except Exception:
-                pass
+            is_syncing = True
+            sync_phone_button.text = "同步"
+            sync_phone_button.disabled = True
+            browse_button.disabled = True
+            mode_button.disabled = True
+            reset_button.disabled = True
+            reset_sync_button.disabled = True
+            
+            def sync_thread_func():
+                nonlocal is_syncing
+                try:
+                    sync_phone_complete(music_folder, phone_path)
+                except Exception:
+                    pass
+                finally:
+                    is_syncing = False
+            
+            sync_thread = threading.Thread(target=sync_thread_func, daemon=True)
+            sync_thread.start()
         
         elif action == "reset_sync":
             if music_folder and music_folder in phone_mappings:
@@ -548,12 +699,21 @@ def main():
     reset_sync_button.action = lambda: handle_action("reset_sync")
 
     set_volume(global_volume)
-    load_playlist_state(music_folder)
+    load_playlist_state(music_folder, process_files=False)
 
     running, clock = True, pygame.time.Clock()
     try:
         while running:
             dt = clock.tick(60) / 1000.0
+            
+            if not is_syncing and sync_phone_button.disabled:
+                sync_phone_button.disabled = False
+                sync_phone_button.text = "同步"
+                browse_button.disabled = False
+                mode_button.disabled = False
+                reset_button.disabled = False
+                reset_sync_button.disabled = False
+            
             if song_playing and not pygame.mixer.music.get_busy():
                 handle_action("next_auto")
 
