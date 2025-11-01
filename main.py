@@ -351,7 +351,7 @@ def main():
             if saved_pos > 0:
                 is_paused = True
 
-    def load_and_play_song(idx, start_pos=0.0, skip_count=0, original_length=None):
+    def load_and_play_song(idx, start_pos=0.0, skip_count=0, original_length=None, direction=None):
         nonlocal duration, song_playing, is_paused, current_index, saved_pos
         if not current_playlist:
             prepare_scrolling_text(
@@ -395,9 +395,16 @@ def main():
                 controls[2].text = "播放"
                 current_index = 0
                 return
-            if old_index >= len(current_playlist):
-                current_index = 0
-            load_and_play_song(current_index, start_pos=0.0, skip_count=skip_count + 1, original_length=original_length)
+            if direction == "prev":
+                next_idx = (old_index - 1) % len(current_playlist)
+            elif direction == "next":
+                next_idx = old_index % len(current_playlist)
+            else:
+                if old_index >= len(current_playlist):
+                    next_idx = 0
+                else:
+                    next_idx = old_index % len(current_playlist)
+            load_and_play_song(next_idx, start_pos=0.0, skip_count=skip_count + 1, original_length=original_length, direction=direction)
             return
         
         try:
@@ -424,11 +431,18 @@ def main():
                 controls[2].text = "播放"
                 current_index = 0
                 return
-            if old_index >= len(current_playlist):
-                current_index = 0
-            load_and_play_song(current_index, start_pos=0.0, skip_count=skip_count + 1, original_length=original_length)
+            if direction == "prev":
+                next_idx = (old_index - 1) % len(current_playlist)
+            elif direction == "next":
+                next_idx = old_index % len(current_playlist)
+            else:
+                if old_index >= len(current_playlist):
+                    next_idx = 0
+                else:
+                    next_idx = old_index % len(current_playlist)
+            load_and_play_song(next_idx, start_pos=0.0, skip_count=skip_count + 1, original_length=original_length, direction=direction)
 
-    def load_song_info_only(idx, skip_count=0, original_length=None):
+    def load_song_info_only(idx, skip_count=0, original_length=None, direction=None):
         nonlocal duration, song_playing, current_index
         if not current_playlist:
             prepare_scrolling_text(
@@ -465,9 +479,16 @@ def main():
                 song_playing = False
                 current_index = 0
                 return
-            if old_index >= len(current_playlist):
-                current_index = 0
-            load_song_info_only(current_index, skip_count=skip_count + 1, original_length=original_length)
+            if direction == "prev":
+                next_idx = (old_index - 1) % len(current_playlist)
+            elif direction == "next":
+                next_idx = old_index % len(current_playlist)
+            else:
+                if old_index >= len(current_playlist):
+                    next_idx = 0
+                else:
+                    next_idx = old_index % len(current_playlist)
+            load_song_info_only(next_idx, skip_count=skip_count + 1, original_length=original_length, direction=direction)
             return
         
         try:
@@ -489,9 +510,16 @@ def main():
                 song_playing = False
                 current_index = 0
                 return
-            if old_index >= len(current_playlist):
-                current_index = 0
-            load_song_info_only(current_index, skip_count=skip_count + 1, original_length=original_length)
+            if direction == "prev":
+                next_idx = (old_index - 1) % len(current_playlist)
+            elif direction == "next":
+                next_idx = old_index % len(current_playlist)
+            else:
+                if old_index >= len(current_playlist):
+                    next_idx = 0
+                else:
+                    next_idx = old_index % len(current_playlist)
+            load_song_info_only(next_idx, skip_count=skip_count + 1, original_length=original_length, direction=direction)
 
     def seek_music(ratio):
         nonlocal saved_pos
@@ -525,10 +553,11 @@ def main():
                 if current_playlist
                 else 0
             )
+            direction = "prev" if action == "prev" else ("next" if action in ["next", "next_auto"] else None)
             if action == "next_auto" or not is_paused:
-                load_and_play_song(next_idx, start_pos=0.0)
+                load_and_play_song(next_idx, start_pos=0.0, direction=direction)
             else:
-                load_song_info_only(next_idx)
+                load_song_info_only(next_idx, direction=direction)
                 saved_pos = 0.0
         elif action == "rewind":
             if duration > 0:
