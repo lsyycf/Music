@@ -362,12 +362,6 @@ SCROLL_DELAY_DURATION = 2000          # 文字滚动延迟（毫秒）
 MAX_WORKERS = 8                       # 手机同步并发数
 ```
 
-### 时间处理工具函数
-
-程序提供了统一的时间处理函数（`config.py`）：
-- `get_datetime()`: 返回当天 00:00:00 的时间对象
-- `get_timestr()`: 返回格式化的时间字符串（YYYYMMDDHHMM）
-
 ---
 
 ## 🤝 贡献与反馈
